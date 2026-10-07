@@ -8,19 +8,15 @@ Pixi supplies the dependencies; agents can disable selection with `--no-interact
 
 ## Install
 
-With [Pixi](https://pixi.sh) installed:
+With [Pixi](https://pixi.sh) installed, run this command and follow the printed instructions:
 
 ```sh
-git clone git@github.com:leej3/wt-utils.git && cd wt-utils
-pixi run --locked install-cli
+curl -fsSL https://raw.githubusercontent.com/leej3/wt-utils/main/install.sh | bash
 ```
-
-Put `~/.local/bin` on your PATH and source the shell file printed by the installer from your Bash or Zsh startup file.
-Keep the checkout in place.
 
 ## Use
 
-Run `wt` or `wt cd` to select a worktree and change into it.
+Run `wt` to select a worktree and change into it.
 For commands and options, use:
 
 ```sh

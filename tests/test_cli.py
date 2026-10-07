@@ -415,3 +415,51 @@ def test_installer_migrates_owned_entrypoint_and_shell(tmp_path):
     target.write_text("foreign content")
     with pytest.raises(RuntimeError, match="refusing"):
         module.install_shell(tmp_path, config)
+
+
+def test_install_instructions_detect_path_and_quote_commands(tmp_path):
+    import importlib.util
+    import shlex
+
+    spec = importlib.util.spec_from_file_location(
+        "install", Path(__file__).parents[1] / "scripts/install_cli.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    home = tmp_path / "home with spaces"
+    home.mkdir()
+    integration = home / ".config/wt-utils/shell.sh"
+    integration.parent.mkdir(parents=True)
+    integration.write_text("# shell fixture\n")
+    missing = module.instructions(home, integration, "/usr/bin", "/bin/bash")
+    assert "export PATH=" in missing and ".bashrc" in missing
+    commands = missing.splitlines()[2:-2]
+    subprocess.run(
+        ["bash", "-c", "\n".join(commands)],
+        env=dict(os.environ, HOME=str(home)),
+        check=True,
+    )
+    assert 'export PATH="$HOME/.local/bin:$PATH"' in (home / ".bashrc").read_text()
+    assert f"source {shlex.quote(str(integration))}" in (home / ".bashrc").read_text()
+    present = module.instructions(
+        home, integration, str(home / ".local/bin") + ":/usr/bin", "/bin/zsh"
+    )
+    assert "export PATH=" not in present and ".zshrc" in present
+
+
+def test_installer_can_replace_its_own_previous_checkout(tmp_path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "install", Path(__file__).parents[1] / "scripts/install_cli.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    old = tmp_path / "old/bin/wt-utils"
+    old.parent.mkdir(parents=True)
+    old.write_text("from wt_utils.cli import main\n")
+    module.install(tmp_path, old)
+    new = tmp_path / "new/bin/wt-utils"
+    new.parent.mkdir(parents=True)
+    new.touch()
+    assert module.install(tmp_path, new).resolve() == new
