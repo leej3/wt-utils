@@ -239,7 +239,7 @@ def test_install_direct_entrypoint(tmp_path):
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    executable = tmp_path / "env/bin/wt"
+    executable = tmp_path / "env/bin/wt-utils"
     executable.parent.mkdir(parents=True)
     executable.touch()
     target = module.install(tmp_path, executable)
@@ -344,3 +344,74 @@ def test_real_fzf_new_query(tmp_path):
             os.waitpid(pid, 0)
         except ProcessLookupError:
             pass
+
+
+def test_shell_interface(tmp_path):
+    import shutil
+
+    shell = Path(__file__).parents[1] / "wt_utils/shell.sh"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    destination = tmp_path / "directory with spaces"
+    destination.mkdir()
+    executable = bin_dir / "wt-utils"
+    executable.write_text(
+        '#!/bin/sh\nif [ "$1" = cd ]; then\n  [ "$2" != fail ] || exit 130\n  printf "%s\\n" "$DESTINATION"\nelse\n  printf "%s\\n" "$@"\nfi\n'
+    )
+    executable.chmod(0o755)
+    env = dict(
+        os.environ,
+        PATH=str(bin_dir) + os.pathsep + os.environ["PATH"],
+        DESTINATION=str(destination),
+    )
+    for name in ("bash", "zsh"):
+        if not shutil.which(name):
+            continue
+        for invocation in ("wt", "wt cd feature --no-interactive"):
+            result = subprocess.run(
+                [name, "-c", 'source "$1"; ' + invocation + "; pwd", name, str(shell)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            assert result.stdout.strip() == str(destination)
+        result = subprocess.run(
+            [
+                name,
+                "-c",
+                'source "$1"; before="$PWD"; wt cd fail; wt_status=$?; [ "$wt_status" = 130 ] && [ "$PWD" = "$before" ] || exit 1; wt list --json',
+                name,
+                str(shell),
+            ],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        assert result.stdout == "list\n--json\n"
+
+
+def test_installer_migrates_owned_entrypoint_and_shell(tmp_path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "install", Path(__file__).parents[1] / "scripts/install_cli.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    executable = tmp_path / "env/bin/wt-utils"
+    executable.parent.mkdir(parents=True)
+    executable.touch()
+    old = tmp_path / ".local/bin/wt"
+    old.parent.mkdir(parents=True)
+    old.symlink_to(executable.with_name("wt"))
+    assert module.install(tmp_path, executable).name == "wt-utils"
+    assert not old.is_symlink()
+    config = tmp_path / "config"
+    target = module.install_shell(tmp_path, config)
+    assert target.read_text() == module.SHELL.read_text()
+    assert module.install_shell(tmp_path, config) == target
+    target.write_text("foreign content")
+    with pytest.raises(RuntimeError, match="refusing"):
+        module.install_shell(tmp_path, config)

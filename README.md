@@ -22,7 +22,8 @@ pixi run pre-commit install
 ```
 
 Put `~/.local/bin` on your PATH.
-Installation exposes the package's actual console entrypoint by symlink; it creates no shell functions or wrappers.
+Source `${XDG_CONFIG_HOME:-$HOME/.config}/wt-utils/shell.sh` from your Bash or Zsh startup file, then open a new shell.
+The installer prints the exact file path.
 Keep the checkout and Pixi environment in place.
 Python, Git, and fzf come from that environment.
 Re-run `pixi install --locked` after pulling updates.
@@ -33,15 +34,15 @@ Re-run `pixi install --locked` after pulling updates.
 wt list
 wt new my-feature
 wt new my-feature --base origin/main
-cd "$(wt cd)"
+wt cd
 wt move old-feature
 wt take finished-feature
 wt remove finished-feature
 wt doctor
 ```
 
-`wt` alone opens the navigation selector.
-`cd` prints a path; the enclosing shell's `cd` performs navigation.
+`wt` and `wt cd` open the navigation selector and change your current directory.
+Use `wt cd my-feature` to navigate to a specific branch.
 `new` reuses a branch's existing worktree or creates one.
 Type a new branch in fzf and press Enter.
 Without `--base`, a new branch starts from the locally recorded `origin/HEAD`, or the current HEAD if that remote default is unavailable.
@@ -82,3 +83,12 @@ pixi run format
 
 Tests use temporary local Git repositories and fake selectors.
 They require no network or changes to your own worktrees.
+
+## How navigation works
+
+`wt` is a small shell function backed by the `wt-utils` executable.
+The function changes the current shell's directory for `wt` and `wt cd`; it forwards other subcommands to the executable.
+An executable cannot change its parent shell's directory, so this small piece runs in your shell.
+There is no separate `wtcd` command.
+For scripts that need a path instead of navigation, use `wt-utils cd` or `wt cd --json`.
+Help also passes through without changing directories.
