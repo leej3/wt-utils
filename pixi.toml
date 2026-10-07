@@ -1,0 +1,22 @@
+[workspace]
+name = "wt-utils"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "osx-64", "linux-64"]
+
+[dependencies]
+python = "3.12.*"
+git = ">=2.40,<3"
+fzf = ">=0.60,<1"
+pytest = ">=8,<10"
+ruff = ">=0.12,<1"
+pre-commit = ">=4,<5"
+
+[pypi-dependencies]
+wt-utils = { path = ".", editable = true }
+
+[tasks]
+wt = "python -m wt_utils"
+test = "pytest -q"
+lint = "ruff check ."
+format = "ruff format ."
+install-cli = "python scripts/install_cli.py"
