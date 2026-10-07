@@ -311,6 +311,7 @@ def test_real_fzf_new_query(tmp_path):
             os._exit(1)
     transcript = bytearray()
     sent = False
+    accepted = False
     deadline = time.monotonic() + 8
     try:
         while time.monotonic() < deadline:
@@ -323,8 +324,12 @@ def test_real_fzf_new_query(tmp_path):
                 if b"\x1b[6n" in data:
                     os.write(fd, b"\x1b[1;1R")
                 if not sent and b"main" in data:
-                    os.write(fd, b"new-feature\r")
+                    os.write(fd, b"new-feature")
                     sent = True
+                elif sent and not accepted and b"0/1" in data:
+                    # Wait for the search result before accepting it.
+                    os.write(fd, b"\r")
+                    accepted = True
             done, status = os.waitpid(pid, os.WNOHANG)
             if done:
                 assert os.waitstatus_to_exitcode(status) == 0
