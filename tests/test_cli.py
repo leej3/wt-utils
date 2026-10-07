@@ -432,6 +432,8 @@ def test_install_instructions_detect_path_and_quote_commands(tmp_path):
     integration.parent.mkdir(parents=True)
     integration.write_text("# shell fixture\n")
     missing = module.instructions(home, integration, "/usr/bin", "/bin/bash")
+    assert missing.startswith("Tool files installed. Complete shell setup by running:")
+    assert "echo " in missing and "printf " not in missing
     assert "export PATH=" in missing and ".bashrc" in missing
     commands = missing.splitlines()[2:-2]
     subprocess.run(

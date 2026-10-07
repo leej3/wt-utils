@@ -49,7 +49,7 @@ def install_shell(home: Path, config: Path | None = None) -> Path:
 
 def instructions(home: Path, shell_file: Path, path: str, shell: str) -> str:
     startup = home / (".zshrc" if Path(shell).name == "zsh" else ".bashrc")
-    lines = ["Installed wt. Run the following in your terminal:", ""]
+    lines = ["Tool files installed. Complete shell setup by running:", ""]
     bin_dir = home / ".local/bin"
     on_path = any(
         Path(entry or ".").expanduser().resolve() == bin_dir.resolve()
@@ -61,9 +61,7 @@ def instructions(home: Path, shell_file: Path, path: str, shell: str) -> str:
     commands.append(f"source {shlex.quote(str(shell_file))}")
     for command in commands:
         if not startup.exists() or command not in startup.read_text().splitlines():
-            lines.append(
-                f"printf '%s\\n' {shlex.quote(command)} >> {shlex.quote(str(startup))}"
-            )
+            lines.append(f"echo {shlex.quote(command)} >> {shlex.quote(str(startup))}")
         lines.append(command)
     if Path(shell).name not in ("bash", "zsh"):
         lines.extend(
