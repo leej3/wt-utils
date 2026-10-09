@@ -78,6 +78,25 @@ def worktrees(repo: Path) -> list[Worktree]:
                     prunable=fields.get("prunable"),
                 )
             )
+    if items:
+        common = Path(
+            run(
+                repo, "rev-parse", "--path-format=absolute", "--git-common-dir"
+            ).stdout.strip()
+        )
+        primary_worktree = run(
+            repo,
+            f"--git-dir={common}",
+            "config",
+            "--path",
+            "--get",
+            "core.worktree",
+            check=False,
+        )
+        if primary_worktree.returncode == 0:
+            # core.worktree is relative to the main Git directory, including
+            # when discovery starts from a linked worktree.
+            items[0].path = str((common / primary_worktree.stdout.strip()).resolve())
     return items
 
 

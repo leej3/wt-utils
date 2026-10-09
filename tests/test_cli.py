@@ -90,6 +90,24 @@ def test_new_base_and_failed_allocation(repo):
     assert invoke(repo, "new", "bad branch").returncode == 1
 
 
+@pytest.mark.parametrize("absorbed", [False, True])
+def test_submodule_primary_and_linked_worktrees(repo, absorbed):
+    module = repo / "module with spaces"
+    git(repo, "clone", str(repo), str(module))
+    git(repo, "submodule", "add", str(repo), "module with spaces")
+    if absorbed:
+        git(repo, "submodule", "absorbgitdirs")
+    linked = new(module)
+    for checkout in (module, linked):
+        rows = json.loads(invoke(checkout, "list", "--json").stdout)
+        assert rows[0]["path"] == str(module)
+        assert rows[1]["path"] == str(linked)
+        result = invoke(checkout, "cd", "main")
+        assert result.returncode == 0, result.stderr
+        assert Path(result.stdout.strip()) == module
+        assert new(checkout, "main") == module
+
+
 def test_remove_protects_main_current_and_lock(repo):
     tree = new(repo)
     assert "primary" in invoke(tree, "remove", "main").stderr
