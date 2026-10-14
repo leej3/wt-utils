@@ -100,7 +100,20 @@ def worktrees(repo: Path) -> list[Worktree]:
     return items
 
 
-def pick(labels: list[str], prompt: str, *, query: bool = False) -> int | str:
+def table(items: list[Worktree]) -> tuple[str, list[str]]:
+    rows = [w.label().split("  ", 2) for w in items]
+    headings = ["STATUS", "BRANCH", "PATH"]
+    widths = [max(len(row[i]) for row in [headings, *rows]) for i in range(2)]
+
+    def render(row):
+        return f"{row[0]:<{widths[0]}}  {row[1]:<{widths[1]}}  {row[2]}"
+
+    return render(headings), [render(row) for row in rows]
+
+
+def pick(
+    labels: list[str], prompt: str, *, query: bool = False, header: str | None = None
+) -> int | str:
     if not shutil.which("fzf"):
         raise Error("fzf is required; install with Pixi or pass --no-interactive")
     cmd = [
@@ -113,6 +126,8 @@ def pick(labels: list[str], prompt: str, *, query: bool = False) -> int | str:
         f"wt {prompt} > ",
         "--no-multi",
     ]
+    if header:
+        cmd += ["--header", header]
     if query:
         cmd += ["--print-query", "--bind=enter:accept-or-print-query"]
     env = dict(os.environ, FZF_DEFAULT_OPTS="", FZF_DEFAULT_OPTS_FILE="")
@@ -160,7 +175,8 @@ def select(
     if not candidates:
         raise Error(f"worktree not found: {key or '(none)'}")
     if interactive:
-        return candidates[int(pick([w.label() for w in candidates], command))]
+        header, labels = table(candidates)
+        return candidates[int(pick(labels, command, header=header))]
     if len(candidates) != 1:
         raise Error("select a unique branch, worktree path, or bucket ID")
     return candidates[0]
@@ -323,6 +339,10 @@ def parser() -> argparse.ArgumentParser:
             )
         elif name in ("cd", "move", "remove", "take"):
             sub.add_argument("selector", nargs="?", help="branch, bucket ID, or path")
+        if name in ("list", "cd"):
+            sub.add_argument(
+                "--all", action="store_true", help="include missing worktree paths"
+            )
         if name == "remove":
             sub.add_argument(
                 "--discard-ignored",
@@ -338,6 +358,10 @@ def execute(args: argparse.Namespace):
     current = Path(run(repo, "rev-parse", "--show-toplevel").stdout.strip()).resolve()
     interactive = not getattr(args, "no_interactive", False)
     command = args.command or "cd"
+    if not getattr(args, "all", False) and (
+        command == "list" or (command == "cd" and not getattr(args, "selector", None))
+    ):
+        items = [w for w in items if Path(w.path).is_dir()]
     if command in ("list", "doctor"):
         selected = items
         if interactive:
@@ -409,8 +433,10 @@ def main(argv: list[str] | None = None) -> int:
         if getattr(args, "json", False) or isinstance(value, dict):
             print(json.dumps(value, indent=2))
         elif isinstance(value, list):
-            for row in value:
-                print(Worktree(**row).label())
+            header, rows = table([Worktree(**row) for row in value])
+            print(header)
+            for row in rows:
+                print(row)
         else:
             print(value)
         return 0

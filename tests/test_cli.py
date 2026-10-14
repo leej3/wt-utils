@@ -193,6 +193,51 @@ def test_doctor_does_not_prune(repo):
     assert invoke(repo, "cd", "feature").returncode == 1
 
 
+def test_list_hides_missing_until_requested(repo):
+    import shutil
+
+    tree = new(repo)
+    shutil.rmtree(tree)
+    rows = json.loads(invoke(repo, "list", "--json").stdout)
+    assert [row["path"] for row in rows] == [str(repo)]
+    rows = json.loads(invoke(repo, "list", "--all", "--json").stdout)
+    assert [row["path"] for row in rows] == [str(repo), str(tree)]
+    assert len(cli.worktrees(repo)) == 2
+
+
+def test_table_headings_and_alignment(tmp_path):
+    items = [
+        cli.Worktree(str(tmp_path), branch="main", primary=True),
+        cli.Worktree(str(tmp_path / "absent"), branch="long-branch", locked=""),
+    ]
+    header, rows = cli.table(items)
+    assert header.split() == ["STATUS", "BRANCH", "PATH"]
+    assert rows[0].index("main", len("main")) == rows[1].index("long-branch")
+    assert header.index("PATH") == rows[0].index(str(tmp_path))
+    assert rows[0].index(str(tmp_path)) == rows[1].index(str(tmp_path))
+
+
+def test_navigation_picker_hides_missing_and_has_heading(repo, monkeypatch):
+    import shutil
+
+    tree = new(repo)
+    shutil.rmtree(tree)
+    seen = []
+
+    def fake(labels, prompt, **kwargs):
+        seen.append((labels, kwargs["header"]))
+        return 0
+
+    monkeypatch.setattr(cli, "pick", fake)
+    assert cli.execute(cli.parser().parse_args(["--repo", str(repo), "cd"])) == str(
+        repo
+    )
+    assert len(seen[0][0]) == 1
+    assert seen[0][1].split() == ["STATUS", "BRANCH", "PATH"]
+    cli.execute(cli.parser().parse_args(["--repo", str(repo), "cd", "--all"]))
+    assert len(seen[1][0]) == 2
+
+
 def test_explicit_selection_and_options(repo):
     new(repo)
     assert invoke(repo, "cd").returncode == 1
